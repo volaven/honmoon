@@ -1,0 +1,21 @@
+{
+  "at": "2026-09-27T18:40:03.619253+00:00",
+  "release": "media-preview-r9",
+  "unitTestsPassed": 53,
+  "chromiumMediaTestsPassed": 12,
+  "packagedChecksPassed": 22,
+  "actualSite": {
+    "existingImageDownload": "verified JPEG 270750 bytes",
+    "newGenerationSubmissions": 0,
+    "videoGenerationAndDownload": "pending user UI approval"
+  },
+  "profile": "existing HONMOON-Media-Preview; no cookie migration",
+  "fixes": [
+    "replace contenteditable input without duplicating",
+    "image_to_video chain and sourceResultId resume",
+    "default Grok video 480p",
+    "composer-scoped options and aria-pressed audio",
+    "separate image poster from video readiness",
+    "single-use tab/result-bound blob download with format validation"
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "version": "0.1.0",
+  "name": "honmoon",
+  "dependencies": {
+    "@honmoon/agent-adapter": {
+      "version": "0.1.0",
+      "resolved": "file:../../packages/agent-adapter",
+      "overridden": false
+    },
+    "@honmoon/capabilities": {
+      "version": "0.1.0",
+      "resolved": "file:../../packages/capabilities",
+      "overridden": false
+    },
+    "@honmoon/codex-adapter": {
+      "version": "0.1.0",
+      "resolved": "file:../../packages/codex-adapter",
+      "overridden": false
+    },
+    "@honmoon/core": {
+      "version": "0.1.0",
+      "resolved": "file:../../packages/core",
+      "overridden": false
+    },
+    "@honmoon/mcp": {
+      "version": "0.1.0",
+      "resolved": "file:../../packages/mcp",
+      "overridden": false
+    },
+    "@modelcontextprotocol/sdk": {
+      "version": "1.30.1",
+      "resolved": "https://registry.npmjs.org/@modelcontextprotocol/sdk/-/sdk-1.30.1.tgz",
+      "overridden": false
+    },
+    "agent-browser": {
+      "version": "0.38.1",
+      "resolved": "https://registry.npmjs.org/agent-browser/-/agent-browser-0.38.1.tgz",
+      "overridden": false
+    },
+    "react-dom": {
+      "version": "19.3.0",
+      "resolved": "https://registry.npmjs.org/react-dom/-/react-dom-19.3.0.tgz",
+      "overridden": false
+    },
+    "react": {
+      "version": "19.3.0",
+      "resolved": "https://registry.npmjs.org/react/-/react-19.3.0.tgz",
+      "overridden": false
+    },
+    "ws": {
+      "version": "8.22.0",
+      "resolved": "https://registry.npmjs.org/ws/-/ws-8.22.0.tgz",
+      "overridden": false
+    },
+    "zod": {
+      "version": "3.25.76",
+      "resolved": "https://registry.npmjs.org/zod/-/zod-3.25.76.tgz",
+      "overridden": false
+    }
+  }
+}

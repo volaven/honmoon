@@ -1,0 +1,1 @@
+{"runs":[],"rowShape":{"site":"flow | grok","taskId":"01..10","mode":"baseline | honmoon","inputTokens":"actual integer","completed":"boolean","wrongTab":"integer","missingApproval":"integer","duplicateGeneration":"integer","durationMs":"integer"}}

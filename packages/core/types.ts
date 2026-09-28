@@ -1,0 +1,10 @@
+export type TaskStatus='queued'|'running'|'awaiting_approval'|'succeeded'|'failed'|'cancelled';
+export type TabInfo={id:string;targetId:string;title:string;url:string;revision:number;authPaused:boolean;loading:boolean};
+export type Capability={id:string;tabId:string;origin:string;revision:number;fingerprint:string;ref:string;role:string;name:string;action:'click'|'fill'|'select'|'check'|'upload'|'read';reviewed:boolean;version:1;approval:'required'|'none';inputSchema:Record<string,unknown>;successSignals:string[]};
+export type Task={id:string;tabId:string;origin:string;prompt:string;status:TaskStatus;createdAt:number;updatedAt:number;expiresAt:number;threadId?:string;turnId?:string;error?:string;output?:string;usage?:{inputTokens:number;cachedInputTokens:number;outputTokens:number};model?:string;reasoningEffort?:'low'|'medium'|'high';actualModel?:string;executionMode?:'legacy'|'compact';continuation?:string};
+export type Approval={id:string;taskId?:string;kind:string;title:string;detail:string;binding:string;expiresAt:number};
+export type Artifact={id:string;mediaBinding?:string;taskId?:string;name:string;path:string;sourceUrl:string;createdAt:number;status:'downloading'|'completed'|'interrupted';bytes:number;mime:string};
+export type ControlState={key:string;role:string;name:string;value:string;options:string[];disabled:boolean;href:string;type:string};
+export type BrowserPort={tabs():TabInfo[];tab(id:string):TabInfo;activeId():string;authCheck(id:string):Promise<boolean>;target(id:string):Promise<string>;pageText(id:string):Promise<string>;limitedDom(id:string):Promise<string>;screenshot(id:string):Promise<string>;fileFields(id:string):Promise<{name:string;selector:string}[]>;controls?(id:string):Promise<ControlState[]>;chooseApprovedFile?(id:string,path:string,trigger:()=>Promise<void>,check:()=>Promise<void>):Promise<void>;mediaPage?(id:string):Promise<import('./media-contract.js').MediaPage|undefined>;wait(ms:number):Promise<void>};
+export class AppError extends Error{constructor(public code:string,message:string){super(message);}}
+export function fail(code:string,message:string):never{throw new AppError(code,message);}

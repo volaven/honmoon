@@ -1,0 +1,22 @@
+import {listPackage,extractFile} from '@electron/asar';
+import {readFileSync,existsSync,writeFileSync,mkdirSync,statSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+import assert from 'node:assert/strict';
+import {normalize,join} from 'node:path';
+const variant=process.env.HONMOON_PACKAGE_VARIANT||'';
+if(variant&&!/^media-preview(?:-r\d+)?$/.test(variant))throw Error('Unknown package variant');
+const packageDir=variant?`release/${variant}/HONMOON-win32-x64`:'release/HONMOON-win32-x64';
+const asar=join(packageDir,'resources/app.asar');
+const entries=listPackage(asar).map(p=>p.replaceAll('\\','/'));
+assert.ok(!entries.some(p=>/^\/(?:node_modules|\.runtime|evidence|protocol-schema|tests|scripts)(?:\/|$)/.test(p)));
+assert.ok(!entries.some(p=>/auth\.json|vault-key|mcp-connection|honmoon\.sqlite/.test(p)));
+const hash=b=>createHash('sha256').update(b).digest('hex');
+const stage=JSON.parse(readFileSync('evidence/package-stage.json','utf8')).stage;
+const paths=['dist/main/main.js','dist/main/entry.cjs','dist/main/preload.cjs','dist/main/guard.cjs'];
+for(const p of paths)assert.equal(hash(extractFile(asar,normalize(p))),hash(readFileSync(join(stage,p))),p);
+for(const p of entries.filter(p=>p.startsWith('/dist/ui/')&&existsSync(p.slice(1))&&statSync(p.slice(1)).isFile())){try{assert.equal(hash(extractFile(asar,normalize(p.slice(1)))),hash(readFileSync(p.slice(1))));}catch(e){if(e.code!=='EISDIR')throw e;}}
+assert.ok(!existsSync(join(packageDir,'resources/app.asar.unpacked')));
+assert.equal(hash(readFileSync(join(packageDir,'resources/bridge.cjs'))),hash(readFileSync('dist/mcp/bridge.cjs')));
+assert.equal(hash(readFileSync(join(packageDir,'resources/agent-browser-win32-x64.exe'))),hash(readFileSync('node_modules/agent-browser/bin/agent-browser-win32-x64.exe')));
+const report={at:new Date().toISOString(),noProfileOrCredentialData:true,noNodeModules:true,noDuplicateNativeBinary:true,compiledModulesMatch:paths,bridgeMatches:true,asarBytes:statSync(asar).size,executableSha256:hash(readFileSync(join(packageDir,'HONMOON.exe'))),asarSha256:hash(readFileSync(asar))};
+mkdirSync('evidence',{recursive:true});writeFileSync(variant?`evidence/${variant}-integrity.json`:'evidence/package-integrity.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));

@@ -1,0 +1,23 @@
+node_modules/
+dist/
+release/
+evidence/
+protocol-schema/
+.runtime/
+*.log
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-*
+auth.json
+mcp-connection.json
+profiles/
+downloads/
+
+# Local account diagnostics and machine-specific visual capture helpers.
+scripts/media-pilot-*.mjs
+scripts/grok-*.mjs
+scripts/prepare-grok-review.mjs
+scripts/fix-live-guard-text.mjs
+benchmarks/check-visual.cjs
