@@ -22,3 +22,6 @@ header{height:88px;background:#19161f}.tabbar{height:40px;padding:0 8px;gap:4px;
   *::-webkit-scrollbar-button { display: none !important; }
 }.preview-label{flex-shrink:0;margin:6px 8px;padding:4px 10px;background:#c42b83;color:white;border-radius:5px;font:600 12px system-ui;pointer-events:none}
 .task-approve{width:100%;margin:6px 0;border-color:#c42b83}.task-cost-consent{display:flex;align-items:flex-start;gap:8px;margin:14px 0}.task-cost-consent input{width:auto;flex:none;margin-top:3px}.task-approval-status{font-size:12px;color:#c8acd9}
+
+/* Reserve native macOS traffic lights when the titlebar overlay API is absent. */
+:root[data-platform="darwin"] .tabbar{margin-left:env(titlebar-area-x,80px);width:env(titlebar-area-width,calc(100% - 80px))}

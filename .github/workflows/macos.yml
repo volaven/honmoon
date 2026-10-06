@@ -1,0 +1,50 @@
+name: macOS builds
+on:
+  push:
+    branches: ['codex/macos-support']
+  pull_request:
+    paths: ['main/**', 'packages/**', 'ui/**', 'scripts/**', 'tests/**', 'package*.json', '.github/workflows/macos.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    env:
+      HONMOON_PACKAGE_PLATFORM: darwin
+      HONMOON_PACKAGE_ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run package:mac
+      - run: node scripts/package-check.mjs
+      - name: Native packaged browser verification (isolated test profile)
+        run: node scripts/verify-native.mjs
+      - run: node scripts/release-macos.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: honmoon-macos-${{ matrix.arch }}
+          path: |
+            release/*-macos-*.zip
+            release/*-macos-*.zip.sha256
+            release/honmoon-macos-*.json
+            release/install-macos.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verification-macos-${{ matrix.arch }}
+          path: evidence/

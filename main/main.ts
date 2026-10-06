@@ -1,4 +1,4 @@
-import {app,BrowserWindow,ipcMain,dialog,shell,safeStorage,clipboard} from 'electron';
+import {app,BrowserWindow,ipcMain,dialog,shell,safeStorage,clipboard,Menu} from 'electron';
 import {createServer as netServer} from 'node:net';
 import {randomUUID,randomBytes,timingSafeEqual} from 'node:crypto';
 import {mkdirSync,writeFileSync,readFileSync,existsSync,readdirSync,statSync} from 'node:fs';
@@ -20,7 +20,10 @@ import {resolveCodex,checkBinary} from './runtime.js';
 import {toolDefinition} from '../packages/core/tool-registry.js';
 import {continuationContext} from '../packages/core/continuation.js';
 import {guardConsoleOutput} from './stdio.js';
+import {agentBrowserName,runtimePath} from './platform.js';
+import {localTransport} from './local-transport.js';
 guardConsoleOutput();
+process.env.PATH=runtimePath();
 
 const root=join(dirname(fileURLToPath(import.meta.url)),'../..');
 const benchmark=process.argv.includes('--token-benchmark');
@@ -29,7 +32,8 @@ const dataDir=app.getPath('userData');mkdirSync(dataDir,{recursive:true});
 const mediaPreview=basename(dataDir)==='HONMOON-Media-Preview';
 const cdPort=app.commandLine.getSwitchValue('remote-debugging-port');
 await app.whenReady();
-const window=new BrowserWindow({width:1500,height:940,minWidth:1050,minHeight:700,title:'HONMOON',titleBarStyle:'hidden',titleBarOverlay:{color:'#19161f',symbolColor:'#c9c1d0',height:40},backgroundColor:'#09080d',show:true,autoHideMenuBar:true,webPreferences:{preload:join(root,'dist/main/preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+const window=new BrowserWindow({width:1500,height:940,minWidth:1050,minHeight:700,title:'HONMOON',titleBarStyle:'hidden',...(process.platform==='darwin'?{trafficLightPosition:{x:12,y:12}}:{}),titleBarOverlay:{color:'#19161f',symbolColor:'#c9c1d0',height:40},backgroundColor:'#09080d',show:true,autoHideMenuBar:true,webPreferences:{preload:join(root,'dist/main/preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+if(process.platform==='darwin')Menu.setApplicationMenu(Menu.buildFromTemplate([{role:'appMenu'},{role:'editMenu'},{role:'viewMenu'},{role:'windowMenu'}]));
 window.webContents.on('will-navigate',event=>event.preventDefault());window.webContents.setWindowOpenHandler(()=>({action:'deny'}));
 app.on('second-instance',()=>{window.show();window.focus();});
 const store=new Store(join(dataDir,'honmoon.sqlite'));
@@ -38,9 +42,11 @@ const changed=()=>{if(!ready||window.isDestroyed())return;browser.setLocked(!!co
 const permissions=new Permissions(changed,data=>store.event('approval.task.consumed',data));
 browser=new Browser(window,changed,permissions);
 const fixture=await startFixture();
-const binary=app.isPackaged?join(process.resourcesPath,'agent-browser-win32-x64.exe'):join(root,'node_modules','agent-browser','bin','agent-browser-win32-x64.exe');
+const nativeName=agentBrowserName();
+const binary=app.isPackaged?join(process.resourcesPath,nativeName):join(root,'node_modules','agent-browser','bin',nativeName);
+const transport=localTransport(dataDir);
 let browserRuntime:{path:string;version?:string;error?:string}={path:binary};try{browserRuntime=checkBinary(binary,'agent-browser');}catch(e){browserRuntime.error=(e as Error).message;latestError=browserRuntime.error;}
-const adapter=new AgentBrowser(binary,String(cdPort),'honmoon-'+process.pid,join(dataDir,'agent-browser'));
+const adapter=new AgentBrowser(binary,String(cdPort),'honmoon-'+process.pid,transport.agentHome);
 adapter.viewport=()=>browser.bounds;
 
 core=new Orchestrator(browser,adapter,store,permissions,changed);
@@ -59,18 +65,18 @@ browser.session.on('will-download',(_event,item,wc)=>{
  item.on('updated',()=>{art.bytes=item.getReceivedBytes();store.artifact(art);changed();});item.on('done',(_e,status)=>{art.status=status==='completed'?'completed':'interrupted';art.bytes=item.getReceivedBytes();store.artifact(art);store.event('download.'+art.status,{id:art.id,taskId:art.taskId,bytes:art.bytes});changed();});
 });
 
-// The external MCP connector uses an authenticated, local named pipe. No HTTP listener.
-const pipe='\\\\.\\pipe\\honmoon-'+randomUUID();const token=randomBytes(32).toString('hex');
+// Authenticated local IPC: Windows named pipe or owner-only Unix socket.
+const pipe=transport.pipe;const token=randomBytes(32).toString('hex');
 const gateway=netServer(socket=>{let buffer='';socket.setTimeout(150000,()=>socket.destroy());socket.on('error',()=>{});socket.on('data',async chunk=>{buffer+=chunk;if(buffer.length>65536){socket.destroy();return;}if(!buffer.includes('\n'))return;socket.removeAllListeners('data');try{const r=JSON.parse(buffer.trim());const candidate=Buffer.from(String(r.token||''));const expected=Buffer.from(token);if(candidate.length!==expected.length||!timingSafeEqual(candidate,expected))throw new Error('Unauthorized');if(!toolDefinition(r.method))throw new Error('Tool denied');socket.end(JSON.stringify({result:await core.tool(r.method,r.args)})+'\n');}catch(e){socket.end(JSON.stringify({error:redact((e as Error).message)})+'\n');}});});
-await new Promise<void>(resolve=>gateway.listen(pipe,resolve));
-const connectionFile=join(dataDir,'mcp-connection.json');writeFileSync(connectionFile,JSON.stringify({pipe,token}));
-try{execFileSync('icacls',[connectionFile,'/inheritance:r','/grant:r',`${process.env.USERDOMAIN}\\${process.env.USERNAME}:(F)`],{windowsHide:true,stdio:'ignore'});}catch{latestError='MCP 연결 파일의 권한 제한을 확인하지 못했습니다. 외부 MCP를 비활성화했습니다.';gateway.close();}
+await new Promise<void>((resolve,reject)=>{gateway.once('error',reject);gateway.listen(pipe,()=>{gateway.removeListener('error',reject);resolve();});});
+const connectionFile=join(dataDir,'mcp-connection.json');
+try{transport.secureSocket();transport.connection(connectionFile,{pipe,token});}catch{latestError='MCP 연결 파일의 권한 제한을 확인하지 못했습니다. 외부 MCP를 비활성화했습니다.';gateway.close();}
 const mcpCommand=app.isPackaged?process.execPath:'node';const mcpArgs=[app.isPackaged?join(process.resourcesPath,'bridge.cjs'):join(root,'dist/mcp/bridge.cjs'),'--connection',connectionFile];const mcpEnv:Record<string,string>=app.isPackaged?{ELECTRON_RUN_AS_NODE:'1'}:{};const integrations=integrationConfigs(mcpCommand,mcpArgs,mcpEnv);const mcpConfig=JSON.parse(integrations.claude);
 
 const vaultIndexFile=join(dataDir,'vault-index.json');let vaults:any[]=existsSync(vaultIndexFile)?JSON.parse(readFileSync(vaultIndexFile,'utf8')):[];
-function vaultKey(){if(!safeStorage.isEncryptionAvailable())fail('ENCRYPTION_UNAVAILABLE','OS 암호화 기능을 사용할 수 없습니다.');const keyFile=join(dataDir,'vault-key.dpapi');if(!existsSync(keyFile))writeFileSync(keyFile,safeStorage.encryptString(randomBytes(32).toString('hex')));return safeStorage.decryptString(readFileSync(keyFile));}
+function vaultKey(){if(!safeStorage.isEncryptionAvailable())fail('ENCRYPTION_UNAVAILABLE','OS 암호화 기능을 사용할 수 없습니다.');const keyFile=join(dataDir,process.platform==='win32'?'vault-key.dpapi':'vault-key.safe-storage');if(!existsSync(keyFile))writeFileSync(keyFile,safeStorage.encryptString(randomBytes(32).toString('hex')),{mode:0o600});return safeStorage.decryptString(readFileSync(keyFile));}
 adapter.secrets=()=>({AGENT_BROWSER_ENCRYPTION_KEY:vaultKey()});
-function state(){return {taskApproval:core.task?permissions.taskGrant(core.task.id):undefined,mediaPreview,mediaJobs:store.mediaJobs().map(j=>core.media.publicJob(j)),executionMode:core.defaultMode,tabs:browser.tabs(),activeId:browser.activeId(),task:core.task,tasks:store.tasks(),capabilities:core.capabilities,approvals:permissions.list(),artifacts:store.artifacts().map(({path,...rest})=>rest),events:store.events().slice(0,30),files:[...core.files.values()].map(({id,name,size})=>({id,name,size})),codex:{status:codex.status,authenticated:!!codex.account,models:codex.models.map(m=>({id:m.id,model:m.model,name:m.displayName||m.model,isDefault:m.isDefault,efforts:m.supportedReasoningEfforts?.map((e:any)=>e.reasoningEffort||e)})),login:codex.login,output:redact(codex.output)},runtimes:{browser:browserRuntime,codex:{path:codex.binary,status:codex.status}},support:siteSupport,fixtureUrl:fixture.url,error:latestError,vaults,mcpConfig,versions:{electron:process.versions.electron,chromium:process.versions.chrome,agentBrowser:'0.38.1'}};}
+function state(){return {platform:process.platform,taskApproval:core.task?permissions.taskGrant(core.task.id):undefined,mediaPreview,mediaJobs:store.mediaJobs().map(j=>core.media.publicJob(j)),executionMode:core.defaultMode,tabs:browser.tabs(),activeId:browser.activeId(),task:core.task,tasks:store.tasks(),capabilities:core.capabilities,approvals:permissions.list(),artifacts:store.artifacts().map(({path,...rest})=>rest),events:store.events().slice(0,30),files:[...core.files.values()].map(({id,name,size})=>({id,name,size})),codex:{status:codex.status,authenticated:!!codex.account,models:codex.models.map(m=>({id:m.id,model:m.model,name:m.displayName||m.model,isDefault:m.isDefault,efforts:m.supportedReasoningEfforts?.map((e:any)=>e.reasoningEffort||e)})),login:codex.login,output:redact(codex.output)},runtimes:{browser:browserRuntime,codex:{path:codex.binary,status:codex.status}},support:siteSupport,fixtureUrl:fixture.url,error:latestError,vaults,mcpConfig,versions:{electron:process.versions.electron,chromium:process.versions.chrome,agentBrowser:'0.38.1'}};}
 
 async function dispatch(method:string,args:any={}){
  switch(method){
@@ -93,7 +99,7 @@ async function dispatch(method:string,args:any={}){
   case 'artifacts.reveal':{const a=store.artifacts().find(a=>a.id===args.id);if(a&&existsSync(a.path))shell.showItemInFolder(a.path);return true;}
   case 'artifacts.preview':{const a=store.artifacts().find(a=>a.id===args.id);if(!a||a.status!=='completed')fail('ARTIFACT_UNAVAILABLE','완료된 결과물이 아닙니다.');const size=statSync(a.path).size;if(size>30*1024*1024||!/^image\/(png|jpeg|webp|gif)$|^video\/(mp4|webm)$/.test(a.mime))fail('PREVIEW_UNSUPPORTED','이 형식은 미리보기를 제공하지 않습니다. 폴더에서 확인하세요.');return {mime:a.mime,data:readFileSync(a.path).toString('base64')};}
   case 'codex.connect':await codex.connect();return true;
-  case 'codex.binary':{const r=await dialog.showOpenDialog(window,{title:'Codex CLI 실행파일 선택',filters:[{name:'Codex CLI',extensions:['exe']}],properties:['openFile']});if(r.canceled)return false;const selected=checkBinary(r.filePaths[0],'codex');codex.dispose();writeFileSync(join(dataDir,'runtime-settings.json'),JSON.stringify({codexPath:selected.path}));codex.status='disconnected';await codex.connect();latestError='';changed();return true;}
+  case 'codex.binary':{const r=await dialog.showOpenDialog(window,{title:'Codex CLI 실행파일 선택',...(process.platform==='win32'?{filters:[{name:'Codex CLI',extensions:['exe']}]}:{}),properties:['openFile']});if(r.canceled)return false;const selected=checkBinary(r.filePaths[0],'codex');codex.dispose();writeFileSync(join(dataDir,'runtime-settings.json'),JSON.stringify({codexPath:selected.path}));codex.status='disconnected';await codex.connect();latestError='';changed();return true;}
   case 'codex.login':{const r=await codex.loginStart();core.cancel('AUTH_HANDOFF');if(r.verificationUrl)await browser.create(r.verificationUrl,true);return r;}
   case 'mcp.copy':{const client=z.enum(['codex','claude','antigravity']).default('claude').parse(args.client);clipboard.writeText(integrationConfigs(mcpCommand,[...mcpArgs,'--toolset',core.defaultMode],mcpEnv)[client]);return true;}
   case 'vault.save':{const p=z.object({name:z.string().min(1).max(60),url:z.string(),username:z.string().min(1).max(300),password:z.string().min(1).max(4000)}).strict().parse(args);const url=normalizeUrl(p.url);const id='honmoon-'+randomUUID();await adapter.raw(['auth','save',id,'--url',url,'--username',p.username,'--password-stdin'],p.password,{AGENT_BROWSER_ENCRYPTION_KEY:vaultKey()});vaults.push({id,name:p.name,url:new URL(url).origin});writeFileSync(vaultIndexFile,JSON.stringify(vaults));changed();return true;}
@@ -109,6 +115,6 @@ await browser.create(selftest?fixture.url:fixture.url+'/newtab');
 void codex.connect().catch(e=>{latestError='Codex 연결: '+redact(e.message);changed();});
 changed();
 let closing=false;
-app.on('before-quit',event=>{if(closing)return;event.preventDefault();closing=true;ready=false;if(pushTimer)clearTimeout(pushTimer);core.dispose();codex.dispose();adapter.cancel();permissions.cancel();gateway.close();fixture.server.close();browser.session.flushStorageData();void Promise.race([browser.session.cookies.flushStore(),new Promise(resolve=>setTimeout(resolve,3000))]).catch(()=>{}).finally(()=>{browser.dispose();store.close();app.quit();});});
+app.on('before-quit',event=>{if(closing)return;event.preventDefault();closing=true;ready=false;if(pushTimer)clearTimeout(pushTimer);core.dispose();codex.dispose();adapter.cancel();permissions.cancel();gateway.close(()=>transport.cleanup());fixture.server.close();browser.session.flushStorageData();void Promise.race([browser.session.cookies.flushStore(),new Promise(resolve=>setTimeout(resolve,3000))]).catch(()=>{}).finally(()=>{browser.dispose();store.close();app.quit();});});
 window.on('closed',()=>app.quit());
 if(selftest){const {verify}=await import('./verify.js');const outputRoot=app.isPackaged?join(app.getPath('temp'),'honmoon-package-verification'):root;let exitCode=0;try{const run=benchmark?(await import('./token-benchmark.js')).tokenBenchmark:verify;await run({app,window,browser,core,adapter,permissions,store,codex,fixtureUrl:fixture.url,root:outputRoot,state,dispatch});}catch(e){console.error(e);mkdirSync(join(outputRoot,'evidence'),{recursive:true});writeFileSync(join(outputRoot,'evidence','verify-error.txt'),String((e as Error).stack));exitCode=1;}finally{app.quit();if(exitCode)app.exit(exitCode);}}

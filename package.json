@@ -14,7 +14,8 @@
     "dev": "npm run build && npm start",
     "test": "tsx --test tests/*.test.ts",
     "verify": "tsx scripts/verify.ts",
-    "package": "npm run build && node scripts/package.mjs"
+    "package": "npm run build && node scripts/package.mjs",
+    "package:mac": "npm run build && node scripts/package.mjs --platform=darwin"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.1",

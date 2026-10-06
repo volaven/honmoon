@@ -1,6 +1,6 @@
 # HONMOON 0.1 — Chromium 내장 에이전트 브라우저
 
-Windows x64 전용 개발 시제품입니다. Electron의 Chromium이 실제 웹페이지를 렌더링합니다. 기존 Chrome에 연결하거나 Chrome 프로필을 복사하지 않습니다. 테마 시제품 `../prototypes/honmoon`은 그대로 보존했습니다.
+Windows x64 및 macOS(Apple Silicon·Intel)용 개발 시제품입니다. macOS는 시험 빌드이며 [Mac 실행·설치 안내](docs/MACOS.md)에 검증 범위를 표시합니다. Electron의 Chromium이 실제 웹페이지를 렌더링합니다. 기존 Chrome에 연결하거나 Chrome 프로필을 복사하지 않습니다. 테마 시제품 `../prototypes/honmoon`은 그대로 보존했습니다.
 
 저장소: [volaven/honmoon](https://github.com/volaven/honmoon). 최신 검증 패키지는 [생성 시험판 r9](https://github.com/volaven/honmoon/releases/tag/v0.1.0-media-preview-r9)입니다. 실제 Grok/Flow 영상 생성의 전체 경로는 아직 시험 지원입니다.
 
@@ -10,7 +10,7 @@ Windows x64 전용 개발 시제품입니다. Electron의 Chromium이 실제 웹
 
 패키지 폴더 전체를 유지한 상태로 **HONMOON.exe**를 실행하세요. EXE만 따로 복사하지 마세요. `ELECTRON_RUN_AS_NODE` 환경변수를 사용하는 개발 도구 안에서는 **Start-HONMOON.cmd**를 사용합니다. 코드 서명과 자동 업데이트는 포함하지 않았습니다.
 
-소스 실행은 Node.js 24 이상에서 `npm ci`, `npm run build`, `npm start` 순서입니다. `npm test`는 정책 검증, `npm run verify`는 별도 임시 프로필을 쓰는 실제 Chromium 통합 검증입니다. `npm run package`는 `release/HONMOON-win32-x64`를 생성합니다.
+소스 실행은 Node.js 24 이상에서 `npm ci`, `npm run build`, `npm start` 순서입니다. `npm test`는 정책 검증, `npm run verify`는 별도 임시 프로필을 쓰는 실제 Chromium 통합 검증입니다. Windows의 `npm run package`는 `release/HONMOON-win32-x64`를, Mac의 `npm run package:mac`은 `release/HONMOON-darwin-<arch>/HONMOON.app`을 생성합니다.
 
 ## 사용 순서
 
@@ -26,9 +26,9 @@ Codex 로그인 없이도 **현재 화면의 기능 찾기 → 기능 선택 →
 
 ## 저장과 권한
 
-- 앱 데이터: `%APPDATA%/HONMOON`. 전용 Chromium 프로필, SQLite 작업·승인·산출물 메타데이터, 다운로드, 별도 Codex 설정을 저장합니다.
+- 앱 데이터: Windows `%APPDATA%/HONMOON`, macOS `~/Library/Application Support/HONMOON`. 전용 Chromium 프로필, SQLite 작업·승인·산출물 메타데이터, 다운로드, 별도 Codex 설정을 저장합니다.
 - 생성 시험판(r9 포함)은 `%APPDATA%/HONMOON-Media-Preview`를 사용합니다. 시험판 업데이트 시 이 프로필을 유지하며 쿠키·인증 파일을 배포하거나 다른 브라우저에서 복사하지 않습니다.
-- Auth Vault는 agent-browser의 AES 암호화 저장소를 사용합니다. 키는 Electron safeStorage를 통해 Windows DPAPI로 보호합니다. upstream 저장 위치인 `%USERPROFILE%/.agent-browser/auth`에 `honmoon-UUID` 이름으로 저장하고 키·목록은 HONMOON 데이터에 보관합니다. **브라우저 프로필 전체가 암호화된다는 뜻이 아닙니다.**
+- Auth Vault는 agent-browser의 AES 암호화 저장소를 사용합니다. 키는 Electron safeStorage를 통해 Windows DPAPI / macOS Keychain으로 보호합니다. upstream 저장 위치인 사용자 홈의 `.agent-browser/auth`에 `honmoon-UUID` 이름으로 저장하고 키·목록은 HONMOON 데이터에 보관합니다. **브라우저 프로필 전체가 암호화된다는 뜻이 아닙니다.**
 - 일반 페이지는 sandbox/contextIsolation을 사용하며 Node.js와 제품 IPC가 없습니다. 웹 권한은 제품의 별도 승인 창으로 요청합니다.
 - 자동화는 앱이 만든 탭의 target ID만 선택합니다. CDP는 내부 루프백 포트이며 공개 MCP는 임의 CDP·JS·셸·쿠키·인증정보 조회를 제공하지 않습니다. 로컬 계정 자체가 침해된 상황을 격리하는 보안 제품은 아닙니다.
 - 파일 업로드는 사용자가 파일 선택 창에서 고른 ID만 허용합니다. 경로·크기·수정시간·내용 해시를 실행 전에 다시 검사합니다.
@@ -37,7 +37,7 @@ Codex 로그인 없이도 **현재 화면의 기능 찾기 → 기능 선택 →
 
 ## 외부 MCP
 
-설정의 **MCP 설정 복사**를 사용합니다. 앱 실행 중에만 현재 사용자에게 제한된 연결 파일과 인증된 Windows named pipe를 이용합니다. 배포본은 Electron 내장 Node 런타임으로 MCP bridge를 실행하므로 별도 Node 설치가 필요하지 않습니다. 소스 개발판은 Node.js 24 이상을 사용합니다.
+설정의 **MCP 설정 복사**를 사용합니다. 앱 실행 중에만 현재 사용자에게 제한된 연결 파일과 인증된 로컬 연결(Windows named pipe / macOS Unix 소켓)을 이용합니다. 배포본은 Electron 내장 Node 런타임으로 MCP bridge를 실행하므로 별도 Node 설치가 필요하지 않습니다. 소스 개발판은 Node.js 24 이상을 사용합니다.
 
 조회: `sessions.list`, `tabs.list`, `capabilities.list`, `capabilities.find`, `capabilities.inspect`, `tasks.status`, `artifacts.list`.
 실행: `tasks.start`, `capabilities.invoke`, `tasks.cancel`, `tasks.finish`.
