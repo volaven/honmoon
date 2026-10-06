@@ -7,6 +7,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: macos-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 jobs:
   package:
     strategy:
@@ -32,9 +35,17 @@ jobs:
       - run: npm test
       - run: npm run package:mac
       - run: node scripts/package-check.mjs
+      - name: Install pinned Codex CLI for protocol smoke test (no login)
+        run: npm install --global @openai/codex@0.160.1
+      - run: sh -n scripts/install-macos.sh
       - name: Native packaged browser verification (isolated test profile)
         run: node scripts/verify-native.mjs
       - run: node scripts/release-macos.mjs
+      - name: Test installer with a disposable home directory
+        run: |
+          mkdir -p "$RUNNER_TEMP/honmoon-install-home"
+          HOME="$RUNNER_TEMP/honmoon-install-home" sh scripts/install-macos.sh "release/HONMOON-0.1.0-macos-${{ matrix.arch }}.zip"
+          test -x "$RUNNER_TEMP/honmoon-install-home/Applications/HONMOON.app/Contents/MacOS/HONMOON"
       - uses: actions/upload-artifact@v4
         with:
           name: honmoon-macos-${{ matrix.arch }}
