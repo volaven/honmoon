@@ -20,7 +20,7 @@ ditto -x -k "$archive" "$staging"
 bundle="$staging/HONMOON-darwin-$target/HONMOON.app"
 test -x "$bundle/Contents/MacOS/HONMOON" || { echo '패키지 실행파일이 없습니다.' >&2; exit 1; }
 codesign --verify --deep --strict "$bundle"
-destination="$HOME/Applications"
+destination=${HONMOON_INSTALL_ROOT:-"$HOME/Applications"}
 mkdir -p "$destination"
 if [ -e "$destination/HONMOON.app" ]; then
  backup="$destination/HONMOON-backup-$(date +%Y%m%d-%H%M%S).app"
